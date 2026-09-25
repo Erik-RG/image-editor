@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PixelForge Studio</title>
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
   <header class="topbar">
@@ -17,36 +17,70 @@
       <button id="reset" type="button">Reset</button>
     </div>
   </header>
-  <main>
-    <aside>
-      <section>
-        <h2>Light</h2>
-        <label>Exposure <output id="exposureOut">0</output><input id="exposure" type="range" min="-100" max="100" value="0"></label>
-        <label>Brightness <output id="brightnessOut">0</output><input id="brightness" type="range" min="-100" max="100" value="0"></label>
-        <label>Contrast <output id="contrastOut">0</output><input id="contrast" type="range" min="-100" max="100" value="0"></label>
-        <label>Highlights <output id="highlightsOut">0</output><input id="highlights" type="range" min="-100" max="100" value="0"></label>
-        <label>Shadows <output id="shadowsOut">0</output><input id="shadows" type="range" min="-100" max="100" value="0"></label>
+
+  <main class="workspace">
+    <section class="editor-shell">
+      <div class="editor-toolbar">
+        <span id="status">Ready for your next idea</span>
+        <div class="zoom-controls">
+          <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+          <output id="zoomLabel">100%</output>
+          <button id="zoomIn" type="button" aria-label="Zoom in">＋</button>
+          <button id="fit" type="button">Fit</button>
+        </div>
+      </div>
+
+      <div id="stage" class="stage">
+        <canvas id="canvas" width="900" height="600"></canvas>
+        <div id="empty" class="empty">
+          <strong>Drop an image here</strong>
+          <span>Open an image to begin editing</span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="inspector">
+      <section class="panel option-panel">
+        <div class="panel-header">
+          <h2>Options</h2>
+        </div>
+
+        <div class="option-group" role="tablist" aria-label="Target scope">
+          <button class="option-button active" type="button" data-target="whole">Whole image</button>
+          <button class="option-button" type="button" data-target="brush">Brush</button>
+          <button class="option-button" type="button" data-target="mask">Mask</button>
+        </div>
+
+        <div class="control-stack">
+          <label class="range-block">
+            <span class="label-row">
+              <span>Brush size</span>
+              <output id="sizeOut">12px</output>
+            </span>
+            <input id="size" type="range" min="2" max="80" value="12">
+          </label>
+
+          <label class="range-block">
+            <span class="label-row">
+              <span>Strength</span>
+              <output id="strengthOut">80%</output>
+            </span>
+            <input id="strength" type="range" min="10" max="100" value="80">
+          </label>
+        </div>
       </section>
-      <section>
-        <h2>Color</h2>
-        <label>Temperature <output id="temperatureOut">0</output><input id="temperature" type="range" min="-100" max="100" value="0"></label>
-        <label>Tint <output id="tintOut">0</output><input id="tint" type="range" min="-100" max="100" value="0"></label>
-        <label>Saturation <output id="saturationOut">0</output><input id="saturation" type="range" min="-100" max="100" value="0"></label>
-        <label>Vibrance <output id="vibranceOut">0</output><input id="vibrance" type="range" min="-100" max="100" value="0"></label>
-        <label>Hue <output id="hueOut">0°</output><input id="hue" type="range" min="-180" max="180" value="0"></label>
-      </section>
-      <section>
-        <h2>Tools</h2>
-        <div class="tools"><button class="tool active" data-tool="select" type="button">Select</button><button class="tool" data-tool="brush" type="button">Brush</button><button class="tool" data-tool="text" type="button">Text</button></div>
-        <label>Brush size <output id="sizeOut">12px</output><input id="size" type="range" min="2" max="80" value="12"></label>
-        <label class="color-label">Ink color <input id="color" type="color" value="#ff5d73"></label>
+
+      <section class="panel layers-panel">
+        <div class="panel-header">
+          <h2>Layers</h2>
+          <button id="addLayer" class="small-button" type="button">＋</button>
+        </div>
+
+        <ul id="layersList" class="layers-list"></ul>
       </section>
     </aside>
-    <section class="editor-shell">
-      <div class="editor-toolbar"><span id="status">Ready for your next idea</span><div class="zoom-controls"><button id="zoomOut" type="button" aria-label="Zoom out">−</button><output id="zoomLabel">100%</output><button id="zoomIn" type="button" aria-label="Zoom in">+</button><button id="fit" type="button">Fit</button></div></div>
-      <div id="stage" class="stage"><canvas id="canvas" width="900" height="600"></canvas><div id="empty" class="empty"><strong>Drop an image here</strong><span>Open an image to begin editing</span></div></div>
-    </section>
   </main>
-  <script src="app.js?v=13"></script>
+
+  <script src="app.js?v=15"></script>
 </body>
 </html>
