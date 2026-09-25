@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PixelForge Studio</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header><h1>PixelForge Studio</h1><div class="actions"><button id="open">Open image</button><input id="file" type="file" accept="image/*" hidden><button id="export">Export PNG</button><button id="reset">Reset</button></div></header>
+  <main><aside>
+    <section><h2>Adjustments</h2>
+      <label>Brightness <output id="brightnessOut">100%</output><input id="brightness" type="range" min="0" max="200" value="100"></label>
+      <label>Contrast <output id="contrastOut">100%</output><input id="contrast" type="range" min="0" max="200" value="100"></label>
+      <label>Saturation <output id="saturationOut">100%</output><input id="saturation" type="range" min="0" max="200" value="100"></label>
+      <label>Grayscale <output id="grayscaleOut">0%</output><input id="grayscale" type="range" min="0" max="100" value="0"></label>
+      <label>Sepia <output id="sepiaOut">0%</output><input id="sepia" type="range" min="0" max="100" value="0"></label>
+      <label>Hue <output id="hueOut">0°</output><input id="hue" type="range" min="0" max="360" value="0"></label>
+    </section>
+    <section><h2>Tools</h2><div class="tools"><button class="tool active" data-tool="select">Select</button><button class="tool" data-tool="brush">Brush</button><button class="tool" data-tool="text">Text</button></div><label>Brush size <output id="sizeOut">12px</output><input id="size" type="range" min="2" max="50" value="12"></label><input id="color" type="color" value="#ff5d73"></section>
+  </aside><section class="stage"><canvas id="canvas" width="900" height="600"></canvas><p id="empty">Open an image to begin editing.</p></section></main>
+  <script src="app.js"></script>
+</body></html>
