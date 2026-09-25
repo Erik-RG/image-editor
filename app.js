@@ -15,6 +15,7 @@ const strengthOutput = $('strengthOut');
 const layerList = $('layersList');
 const zoomLabel = $('zoomLabel');
 const optionButtons = [...document.querySelectorAll('.option-button')];
+const addLayerButton = $('addLayer');
 
 const filterValues = {
   exposure: 0,
@@ -116,6 +117,7 @@ function drawStroke(points, color, width) {
   });
 
   if (points.length === 1) {
+    ctx.beginPath();
     ctx.arc(points[0].x, points[0].y, width / 2, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
@@ -132,7 +134,8 @@ function render() {
     return;
   }
 
-  const imageData = new ImageData(processPixels(source.data), source.width, source.height);
+  const processed = processPixels(source.data);
+  const imageData = new ImageData(processed, source.width, source.height);
 
   canvas.width = source.width;
   canvas.height = source.height;
@@ -145,7 +148,7 @@ function render() {
   if (mode === 'brush') {
     drawStroke(strokePoints, 'rgba(255, 255, 255, 0.85)', Number(sizeInput.value));
   } else if (mode === 'mask') {
-    drawStroke(strokePoints, 'rgba(125, 130, 255, 0.55)', Number(sizeInput.value));
+    drawStroke(strokePoints, 'rgba(125, 130, 255, 0.6)', Number(sizeInput.value));
   }
 
   setLoaded(true);
@@ -153,7 +156,10 @@ function render() {
 
 function fitImage() {
   if (!source) return;
-  zoom = Math.max(0.05, Math.min(1, (stage.clientWidth - 48) / source.width, (stage.clientHeight - 48) / source.height));
+  zoom = Math.max(
+    0.05,
+    Math.min(1, (stage.clientWidth - 48) / source.width, (stage.clientHeight - 48) / source.height)
+  );
   updateZoomLabel();
   render();
 }
@@ -179,10 +185,11 @@ function loadImage(file) {
   }
 
   setStatus('Loading…');
-
   const reader = new FileReader();
+
   reader.onload = () => {
     const image = new Image();
+
     image.onload = () => {
       try {
         const tempCanvas = document.createElement('canvas');
@@ -234,7 +241,9 @@ function renderLayers() {
     item.addEventListener('click', (event) => {
       if (event.target.closest('.layer-toggle')) return;
       const index = Number(item.dataset.index);
-      layers.forEach((layer, layerIndex) => { layer.active = layerIndex === index; });
+      layers.forEach((layer, layerIndex) => {
+        layer.active = layerIndex === index;
+      });
       renderLayers();
       setStatus(`${layers[index].name} selected`);
     });
@@ -289,7 +298,9 @@ $('zoomOut').onclick = () => {
 $('fit').onclick = fitImage;
 
 $('reset').onclick = () => {
-  Object.keys(filterValues).forEach((key) => { filterValues[key] = 0; });
+  Object.keys(filterValues).forEach((key) => {
+    filterValues[key] = 0;
+  });
   sizeInput.value = 12;
   strengthInput.value = 80;
   strokePoints = [];
@@ -297,7 +308,7 @@ $('reset').onclick = () => {
   render();
 };
 
-$('addLayer').onclick = () => {
+addLayerButton.onclick = () => {
   layerNumber += 1;
   const type = layerNumber % 2 === 0 ? 'filter' : 'mask';
   layers.forEach((layer) => { layer.active = false; });
@@ -331,6 +342,7 @@ stage.ondragover = (event) => {
 };
 
 stage.ondragleave = () => stage.classList.remove('dragging');
+
 stage.ondrop = (event) => {
   event.preventDefault();
   stage.classList.remove('dragging');
@@ -351,9 +363,17 @@ canvas.onpointermove = (event) => {
   render();
 };
 
-canvas.onpointerup = () => { drawing = false; };
-canvas.onpointercancel = () => { drawing = false; };
-window.onresize = () => { if (source) fitImage(); };
+canvas.onpointerup = () => {
+  drawing = false;
+};
+
+canvas.onpointercancel = () => {
+  drawing = false;
+};
+
+window.onresize = () => {
+  if (source) fitImage();
+};
 
 $('export').onclick = () => {
   if (!source) return;
