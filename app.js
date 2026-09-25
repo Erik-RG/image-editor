@@ -132,16 +132,14 @@ function render() {
     return;
   }
 
-  const imageData = new ImageData(
-    processPixels(source.data),
-    source.width,
-    source.height
-  );
+  const imageData = new ImageData(processPixels(source.data), source.width, source.height);
 
   canvas.width = source.width;
   canvas.height = source.height;
   canvas.style.width = `${source.width * zoom}px`;
   canvas.style.height = `${source.height * zoom}px`;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.putImageData(imageData, 0, 0);
 
   if (mode === 'brush') {
@@ -155,11 +153,7 @@ function render() {
 
 function fitImage() {
   if (!source) return;
-  zoom = Math.max(0.05, Math.min(
-    1,
-    (stage.clientWidth - 48) / source.width,
-    (stage.clientHeight - 48) / source.height
-  ));
+  zoom = Math.max(0.05, Math.min(1, (stage.clientWidth - 48) / source.width, (stage.clientHeight - 48) / source.height));
   updateZoomLabel();
   render();
 }
@@ -173,46 +167,58 @@ function getPoint(event) {
 }
 
 function loadImage(file) {
-  if (!file || !file.type.startsWith('image/')) {
+  if (!file) {
+    setStatus('Please choose an image file.');
+    return;
+  }
+
+  const isImage = file.type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name || '');
+  if (!isImage) {
     setStatus('Please choose an image file.');
     return;
   }
 
   setStatus('Loading…');
-  const image = new Image();
-  const objectUrl = URL.createObjectURL(file);
 
-  image.onload = () => {
-    try {
-      const imageCanvas = document.createElement('canvas');
-      imageCanvas.width = image.naturalWidth;
-      imageCanvas.height = image.naturalHeight;
-      const imageContext = imageCanvas.getContext('2d');
-      imageContext.drawImage(image, 0, 0);
+  const reader = new FileReader();
+  reader.onload = () => {
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = image.naturalWidth;
+        tempCanvas.height = image.naturalHeight;
 
-      source = {
-        width: imageCanvas.width,
-        height: imageCanvas.height,
-        data: imageContext.getImageData(0, 0, imageCanvas.width, imageCanvas.height).data
-      };
+        const tempContext = tempCanvas.getContext('2d');
+        tempContext.drawImage(image, 0, 0);
 
-      strokePoints = [];
-      fitImage();
-      setStatus(`Loaded: ${file.name}`);
-    } catch (error) {
-      console.error(error);
-      setStatus('The image could not be processed.');
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
+        source = {
+          width: tempCanvas.width,
+          height: tempCanvas.height,
+          data: tempContext.getImageData(0, 0, tempCanvas.width, tempCanvas.height).data
+        };
+
+        strokePoints = [];
+        fitImage();
+        setStatus(`Loaded: ${file.name}`);
+      } catch (error) {
+        console.error(error);
+        setStatus('The image could not be processed.');
+      }
+    };
+
+    image.onerror = () => {
+      setStatus('The image could not be loaded.');
+    };
+
+    image.src = reader.result;
   };
 
-  image.onerror = () => {
-    URL.revokeObjectURL(objectUrl);
+  reader.onerror = () => {
     setStatus('The image could not be loaded.');
   };
 
-  image.src = objectUrl;
+  reader.readAsDataURL(file);
 }
 
 function renderLayers() {
@@ -237,7 +243,8 @@ function renderLayers() {
   layerList.querySelectorAll('.layer-toggle').forEach((button) => {
     button.addEventListener('click', (event) => {
       event.stopPropagation();
-      layers[Number(button.dataset.toggle)].visible = !layers[Number(button.dataset.toggle)].visible;
+      const index = Number(button.dataset.toggle);
+      layers[index].visible = !layers[index].visible;
       renderLayers();
       render();
     });
@@ -250,11 +257,14 @@ function setMode(nextMode) {
   optionButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.target === mode);
   });
-  setStatus({
+
+  const messages = {
     whole: 'Whole image mode: apply adjustments across the full image.',
     brush: 'Brush mode: paint with a soft round brush.',
     mask: 'Mask mode: paint a local mask.'
-  }[mode]);
+  };
+
+  setStatus(messages[mode] || 'Ready');
   render();
 }
 
@@ -310,7 +320,10 @@ sizeInput.oninput = () => {
   render();
 };
 
-strengthInput.oninput = updateLabels;
+strengthInput.oninput = () => {
+  updateLabels();
+  render();
+};
 
 stage.ondragover = (event) => {
   event.preventDefault();
