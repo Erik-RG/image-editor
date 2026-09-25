@@ -1,0 +1,6 @@
+export const state={width:900,height:600,layers:[],selectedId:null,tool:'move',zoom:1,panX:0,panY:0,selection:null,history:[],historyIndex:-1,fg:'#111111',bg:'#ffffff'};
+export const makeCanvas=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c};
+export function newLayer(name='Layer',type='raster'){const c=makeCanvas(state.width,state.height);return{id:crypto.randomUUID(),name,type,canvas:c,visible:true,locked:false,opacity:1,blend:'source-over',x:0,y:0,scaleX:1,scaleY:1,rotation:0,text:type==='text'?'Text':''}}
+export function selected(){return state.layers.find(l=>l.id===state.selectedId)||null}
+export function snapshot(){return state.layers.map(l=>({id:l.id,name:l.name,type:l.type,visible:l.visible,locked:l.locked,opacity:l.opacity,blend:l.blend,x:l.x,y:l.y,scaleX:l.scaleX,scaleY:l.scaleY,rotation:l.rotation,text:l.text,data:l.canvas.toDataURL()}))}
+export async function restore(s){state.layers=[];for(const d of s){const l={...d,canvas:makeCanvas(state.width,state.height)};if(d.data){const img=new Image();await new Promise(r=>{img.onload=r;img.src=d.data});l.canvas.getContext('2d').drawImage(img,0,0)}state.layers.push(l)}state.selectedId=state.layers.at(-1)?.id||null}

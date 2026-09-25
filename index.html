@@ -1,86 +1,20 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PixelForge Studio</title>
-  <link rel="stylesheet" href="styles.css?v=16">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PixelForge</title><link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="."><span class="brand-mark">✦</span><span>PixelForge <small>STUDIO</small></span></a>
-    <div class="actions">
-      <button id="open" class="primary" type="button">Open image</button>
-      <input id="file" type="file" accept="image/*" hidden>
-      <button id="view" type="button" disabled>View</button>
-      <button id="export" type="button" disabled>Download PNG</button>
-      <button id="reset" type="button">Reset</button>
-    </div>
-  </header>
-
-  <main class="workspace">
-    <section class="editor-shell">
-      <div class="editor-toolbar">
-        <span id="status">Ready for your next idea</span>
-        <div class="zoom-controls">
-          <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
-          <output id="zoomLabel">100%</output>
-          <button id="zoomIn" type="button" aria-label="Zoom in">＋</button>
-          <button id="fit" type="button">Fit</button>
-        </div>
-      </div>
-
-      <div id="stage" class="stage">
-        <canvas id="canvas" width="900" height="600"></canvas>
-        <div id="empty" class="empty">
-          <strong>Drop an image here</strong>
-          <span>Open an image to begin editing</span>
-        </div>
-      </div>
-    </section>
-
-    <aside class="inspector">
-      <section class="panel option-panel">
-        <div class="panel-header">
-          <h2>Options</h2>
-        </div>
-
-        <div class="option-group" role="tablist" aria-label="Target scope">
-          <button class="option-button active" type="button" data-target="whole">Whole image</button>
-          <button class="option-button" type="button" data-target="brush">Brush</button>
-          <button class="option-button" type="button" data-target="mask">Mask</button>
-        </div>
-
-        <div class="control-stack">
-          <label class="range-block">
-            <span class="label-row">
-              <span>Brush size</span>
-              <output id="sizeOut">12px</output>
-            </span>
-            <input id="size" type="range" min="2" max="80" value="12">
-          </label>
-
-          <label class="range-block">
-            <span class="label-row">
-              <span>Strength</span>
-              <output id="strengthOut">80%</output>
-            </span>
-            <input id="strength" type="range" min="10" max="100" value="80">
-          </label>
-        </div>
-      </section>
-
-      <section class="panel layers-panel">
-        <div class="panel-header">
-          <h2>Layers</h2>
-          <button id="addLayer" class="small-button" type="button">＋</button>
-        </div>
-
-        <ul id="layersList" class="layers-list"></ul>
-      </section>
-    </aside>
-  </main>
-
-  <script src="app.js?v=16"></script>
-</body>
-</html>
+<header class="appbar"><div class="app-title"><span class="logo">P</span><strong>PixelForge</strong></div><nav class="menus" aria-label="Application menu">
+<button data-menu="file">File</button><button data-menu="edit">Edit</button><button data-menu="image">Image</button><button data-menu="layer">Layer</button><button data-menu="select">Select</button><button data-menu="filter">Filter</button><button data-menu="view">View</button><button data-menu="window">Window</button><button data-menu="help">Help</button>
+</nav><div class="app-actions"><button id="openBtn">Open</button><button id="saveBtn">Export</button></div></header>
+<div id="menuHost" class="menu-host"></div>
+<div class="optionsbar"><div id="toolName" class="tool-name">Move Tool</div><div id="toolOptions" class="tool-options"></div><div class="options-spacer"></div><span id="docInfo">No document</span></div>
+<main class="workspace"><aside class="toolbar" aria-label="Tools">
+<button class="tool active" data-tool="move" title="Move (V)">↖<span>Move</span></button><button class="tool" data-tool="marquee" title="Marquee (M)">▣<span>Marquee</span></button><button class="tool" data-tool="lasso" title="Lasso">⌁<span>Lasso</span></button><button class="tool" data-tool="wand" title="Magic Wand">✧<span>Wand</span></button><button class="tool" data-tool="crop" title="Crop">⌗<span>Crop</span></button><button class="tool" data-tool="eyedropper" title="Eyedropper (I)">⌾<span>Picker</span></button><button class="tool" data-tool="brush" title="Brush (B)">✎<span>Brush</span></button><button class="tool" data-tool="pencil" title="Pencil">／<span>Pencil</span></button><button class="tool" data-tool="eraser" title="Eraser (E)">⌫<span>Eraser</span></button><button class="tool" data-tool="bucket" title="Paint Bucket">▰<span>Bucket</span></button><button class="tool" data-tool="gradient" title="Gradient">▤<span>Gradient</span></button><button class="tool" data-tool="blur" title="Blur">◌<span>Blur</span></button><button class="tool" data-tool="sharpen" title="Sharpen">◇<span>Sharpen</span></button><button class="tool" data-tool="text" title="Text (T)">T<span>Text</span></button><button class="tool" data-tool="shape" title="Shape">□<span>Shape</span></button><button class="tool" data-tool="zoom" title="Zoom (Z)">⌕<span>Zoom</span></button><button class="tool" data-tool="hand" title="Hand (Space)">✋<span>Hand</span></button>
+<div class="swatches"><input id="fgColor" type="color" value="#111111" title="Foreground"><input id="bgColor" type="color" value="#ffffff" title="Background"><button id="swapColors" title="Swap colors">⇄</button></div></aside>
+<section class="canvas-area"><div id="canvasViewport" class="canvas-viewport"><div id="canvasStage" class="canvas-stage"><canvas id="editorCanvas"></canvas><canvas id="overlayCanvas"></canvas></div></div><div class="canvas-controls"><button id="zoomOut">−</button><span id="zoomValue">100%</span><button id="zoomIn">＋</button><button id="zoomFit">Fit</button><button id="zoom100">100%</button></div></section>
+<aside class="rightbar"><section class="panel properties"><header><h2>Properties</h2></header><div id="propertiesBody"></div></section><section class="panel layers-panel"><header><h2>Layers</h2><div><button id="newLayer" title="New layer">＋</button><button id="deleteLayer" title="Delete layer">♲</button></div></header><div class="layer-tools"><button id="duplicateLayer">Duplicate</button><select id="blendMode"><option>normal</option><option>multiply</option><option>screen</option><option>overlay</option><option>darken</option><option>lighten</option></select><input id="layerOpacity" type="range" min="0" max="100" value="100"><output id="opacityValue">100%</output></div><ul id="layers"></ul></section><section class="panel history-panel"><header><h2>History</h2></header><ol id="history"></ol></section></aside></main>
+<footer class="statusbar"><span id="status">Ready</span><span id="pointerInfo">x: — y: —</span><span id="layerInfo">Layer: —</span></footer>
+<input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+<script type="module" src="app.js?v=20"></script>
+</body></html>
