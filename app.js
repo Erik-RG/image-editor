@@ -36,9 +36,9 @@ let zoom = 1;
 let drawing = false;
 let tool = 'select';
 
-function setEmpty(visible) {
-  empty.hidden = !visible;
-  canvas.style.visibility = visible ? 'visible' : 'hidden';
+function setEmpty(showPlaceholder) {
+  empty.hidden = !showPlaceholder;
+  canvas.style.visibility = showPlaceholder ? 'hidden' : 'visible';
 }
 
 function updateLabels() {
@@ -78,21 +78,24 @@ function fitImage() {
 function render() {
   if (!image) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setEmpty(false);
+    setEmpty(true);
     return;
   }
 
-  setEmpty(true);
+  const filteredCanvas = document.createElement('canvas');
+  filteredCanvas.width = baseCanvas.width;
+  filteredCanvas.height = baseCanvas.height;
+  const filteredCtx = filteredCanvas.getContext('2d');
+  filteredCtx.filter = getFilterString();
+  filteredCtx.drawImage(baseCanvas, 0, 0);
 
-  canvas.width = baseCanvas.width;
-  canvas.height = baseCanvas.height;
-  canvas.style.width = `${Math.max(1, canvas.width * zoom)}px`;
-  canvas.style.height = `${Math.max(1, canvas.height * zoom)}px`;
+  canvas.width = filteredCanvas.width;
+  canvas.height = filteredCanvas.height;
+  canvas.style.width = `${Math.max(1, filteredCanvas.width * zoom)}px`;
+  canvas.style.height = `${Math.max(1, filteredCanvas.height * zoom)}px`;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.filter = getFilterString();
-  ctx.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
-  ctx.filter = 'none';
+  ctx.drawImage(filteredCanvas, 0, 0, canvas.width, canvas.height);
 
   for (const stroke of strokes) {
     if (!stroke.points || stroke.points.length === 0) continue;
@@ -117,6 +120,8 @@ function render() {
     ctx.fillText(item.text, item.x, item.y);
     ctx.restore();
   }
+
+  setEmpty(false);
 }
 
 function getPoint(event) {
@@ -295,5 +300,5 @@ window.addEventListener('resize', () => {
 
 updateLabels();
 updateZoom();
-setEmpty(false);
+setEmpty(true);
 render();
