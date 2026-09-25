@@ -5,27 +5,11 @@ const stage = $('stage');
 const fileInput = $('file');
 const empty = $('empty');
 const status = $('status');
+const viewButton = $('view');
+const exportButton = $('export');
 
-const controls = {
-  brightness: $('brightness'),
-  contrast: $('contrast'),
-  saturation: $('saturation'),
-  grayscale: $('grayscale'),
-  sepia: $('sepia'),
-  hue: $('hue'),
-  size: $('size'),
-  color: $('color')
-};
-
-const outputs = {
-  brightness: $('brightnessOut'),
-  contrast: $('contrastOut'),
-  saturation: $('saturationOut'),
-  grayscale: $('grayscaleOut'),
-  sepia: $('sepiaOut'),
-  hue: $('hueOut'),
-  size: $('sizeOut')
-};
+const controls = ['brightness','contrast','saturation','grayscale','sepia','hue','size','color'].reduce((result, id) => { result[id] = $(id); return result; }, {});
+const outputs = ['brightness','contrast','saturation','grayscale','sepia','hue','size'].reduce((result, id) => { result[id] = $(`${id}Out`); return result; }, {});
 
 let image = null;
 let baseCanvas = document.createElement('canvas');
@@ -35,11 +19,6 @@ let texts = [];
 let zoom = 1;
 let drawing = false;
 let tool = 'select';
-
-function setEmpty(showPlaceholder) {
-  empty.hidden = !showPlaceholder;
-  canvas.style.visibility = showPlaceholder ? 'hidden' : 'visible';
-}
 
 function updateLabels() {
   outputs.brightness.textContent = `${controls.brightness.value}%`;
@@ -51,254 +30,88 @@ function updateLabels() {
   outputs.size.textContent = `${controls.size.value}px`;
 }
 
-function updateZoom() {
-  $('zoomOutLabel').textContent = `${Math.round(zoom * 100)}%`;
-}
-
-function getFilterString() {
-  return [
-    `brightness(${controls.brightness.value}%)`,
-    `contrast(${controls.contrast.value}%)`,
-    `saturate(${controls.saturation.value}%)`,
-    `grayscale(${controls.grayscale.value}%)`,
-    `sepia(${controls.sepia.value}%)`,
-    `hue-rotate(${controls.hue.value}deg)`
-  ].join(' ');
-}
+function updateZoom() { $('zoomOutLabel').textContent = `${Math.round(zoom * 100)}%`; }
+function filterString() { return `brightness(${controls.brightness.value}%) contrast(${controls.contrast.value}%) saturate(${controls.saturation.value}%) grayscale(${controls.grayscale.value}%) sepia(${controls.sepia.value}%) hue-rotate(${controls.hue.value}deg)`; }
+function setLoaded(loaded) { empty.hidden = loaded; canvas.style.visibility = loaded ? 'visible' : 'hidden'; viewButton.disabled = !loaded; exportButton.disabled = !loaded; }
 
 function fitImage() {
   if (!image) return;
-  const maxW = Math.max(120, stage.clientWidth - 48);
-  const maxH = Math.max(120, stage.clientHeight - 48);
-  zoom = Math.min(1, maxW / baseCanvas.width, maxH / baseCanvas.height);
+  zoom = Math.min(1, Math.max(120, stage.clientWidth - 48) / baseCanvas.width, Math.max(120, stage.clientHeight - 48) / baseCanvas.height);
   zoom = Number(zoom.toFixed(3));
   updateZoom();
 }
 
 function render() {
-  if (!image) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setEmpty(true);
-    return;
-  }
+  if (!image) { ctx.clearRect(0, 0, canvas.width, canvas.height); setLoaded(false); return; }
 
-  const filteredCanvas = document.createElement('canvas');
-  filteredCanvas.width = baseCanvas.width;
-  filteredCanvas.height = baseCanvas.height;
-  const filteredCtx = filteredCanvas.getContext('2d');
-  filteredCtx.filter = getFilterString();
+  const filtered = document.createElement('canvas');
+  filtered.width = baseCanvas.width;
+  filtered.height = baseCanvas.height;
+  const filteredCtx = filtered.getContext('2d');
+  filteredCtx.filter = filterString();
   filteredCtx.drawImage(baseCanvas, 0, 0);
 
-  canvas.width = filteredCanvas.width;
-  canvas.height = filteredCanvas.height;
-  canvas.style.width = `${Math.max(1, filteredCanvas.width * zoom)}px`;
-  canvas.style.height = `${Math.max(1, filteredCanvas.height * zoom)}px`;
-
+  canvas.width = filtered.width;
+  canvas.height = filtered.height;
+  canvas.style.width = `${Math.max(1, canvas.width * zoom)}px`;
+  canvas.style.height = `${Math.max(1, canvas.height * zoom)}px`;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(filteredCanvas, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(filtered, 0, 0);
 
-  for (const stroke of strokes) {
-    if (!stroke.points || stroke.points.length === 0) continue;
-    ctx.save();
-    ctx.strokeStyle = stroke.color;
-    ctx.lineWidth = stroke.size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    stroke.points.forEach((point, index) => {
-      if (index === 0) ctx.moveTo(point.x, point.y);
-      else ctx.lineTo(point.x, point.y);
-    });
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  for (const item of texts) {
-    ctx.save();
-    ctx.fillStyle = item.color;
-    ctx.font = '32px system-ui';
-    ctx.fillText(item.text, item.x, item.y);
-    ctx.restore();
-  }
-
-  setEmpty(false);
-}
-
-function getPoint(event) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: ((event.clientX - rect.left) / rect.width) * canvas.width,
-    y: ((event.clientY - rect.top) / rect.height) * canvas.height
-  };
+  strokes.forEach((stroke) => {
+    if (!stroke.points.length) return;
+    ctx.save(); ctx.strokeStyle = stroke.color; ctx.lineWidth = stroke.size; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
+    stroke.points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+    ctx.stroke(); ctx.restore();
+  });
+  texts.forEach((item) => { ctx.save(); ctx.fillStyle = item.color; ctx.font = '32px system-ui'; ctx.fillText(item.text, item.x, item.y); ctx.restore(); });
+  setLoaded(true);
 }
 
 function loadImage(file) {
-  if (!file || !file.type.startsWith('image/')) {
-    status.textContent = 'Please choose a valid image file.';
-    return;
-  }
-
+  if (!file || !file.type.startsWith('image/')) { status.textContent = 'Please choose a valid image file.'; return; }
   const url = URL.createObjectURL(file);
   const img = new Image();
-
-  img.onload = () => {
-    image = img;
-    baseCanvas.width = img.naturalWidth;
-    baseCanvas.height = img.naturalHeight;
-    baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
-    baseCtx.drawImage(img, 0, 0, baseCanvas.width, baseCanvas.height);
-    strokes = [];
-    texts = [];
-    fitImage();
-    status.textContent = `Loaded: ${file.name}`;
-    render();
-    URL.revokeObjectURL(url);
-  };
-
-  img.onerror = () => {
-    status.textContent = 'The image could not be loaded.';
-    URL.revokeObjectURL(url);
-  };
-
+  status.textContent = 'Loading image…';
+  img.onload = () => { image = img; baseCanvas.width = img.naturalWidth; baseCanvas.height = img.naturalHeight; baseCtx.drawImage(img, 0, 0); strokes = []; texts = []; fitImage(); status.textContent = `Loaded: ${file.name}`; render(); URL.revokeObjectURL(url); };
+  img.onerror = () => { status.textContent = 'The image could not be loaded.'; URL.revokeObjectURL(url); };
   img.src = url;
 }
 
-function resetEditor() {
-  controls.brightness.value = 100;
-  controls.contrast.value = 100;
-  controls.saturation.value = 100;
-  controls.grayscale.value = 0;
-  controls.sepia.value = 0;
-  controls.hue.value = 0;
-  controls.size.value = 12;
-  controls.color.value = '#ff5d73';
-  strokes = [];
-  texts = [];
-  if (image) fitImage();
-  updateLabels();
-  render();
+function downloadPng() {
+  if (!image) return;
+  canvas.toBlob((blob) => {
+    if (!blob) { status.textContent = 'Could not create the PNG.'; return; }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pixelforge-edited.png';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = 'PNG download started';
+  }, 'image/png');
 }
 
-$('open').addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (event) => {
-  const file = event.target.files && event.target.files[0];
-  loadImage(file);
-  fileInput.value = '';
-});
-
-stage.addEventListener('dragover', (event) => {
-  event.preventDefault();
-  stage.classList.add('dragging');
-});
-
-stage.addEventListener('dragleave', () => {
-  stage.classList.remove('dragging');
-});
-
-stage.addEventListener('drop', (event) => {
-  event.preventDefault();
-  stage.classList.remove('dragging');
-  const file = event.dataTransfer && event.dataTransfer.files[0];
-  loadImage(file);
-});
-
-Object.keys(controls).forEach((key) => {
-  controls[key].addEventListener('input', () => {
-    updateLabels();
-    render();
-  });
-});
-
-document.querySelectorAll('.tool').forEach((button) => {
-  button.addEventListener('click', () => {
-    tool = button.dataset.tool;
-    document.querySelectorAll('.tool').forEach((node) => node.classList.toggle('active', node === button));
-  });
-});
-
-canvas.addEventListener('pointerdown', (event) => {
-  if (!image) return;
-
-  const point = getPoint(event);
-
-  if (tool === 'brush') {
-    drawing = true;
-    strokes.push({
-      color: controls.color.value,
-      size: Number(controls.size.value),
-      points: [point]
-    });
-    render();
-    return;
-  }
-
-  if (tool === 'text') {
-    const text = window.prompt('Add text:', 'Your text');
-    if (!text) return;
-    texts.push({ text, x: point.x, y: point.y, color: controls.color.value });
-    render();
-  }
-});
-
-canvas.addEventListener('pointermove', (event) => {
-  if (!drawing) return;
-  const point = getPoint(event);
-  const lastStroke = strokes[strokes.length - 1];
-  if (lastStroke) {
-    lastStroke.points.push(point);
-    render();
-  }
-});
-
-canvas.addEventListener('pointerup', () => {
-  drawing = false;
-});
-
-canvas.addEventListener('pointerleave', () => {
-  drawing = false;
-});
-
-canvas.addEventListener('dblclick', () => {
-  if (!image) return;
-  zoom = zoom === 1 ? 2 : 1;
-  updateZoom();
-  render();
-});
-
-$('zoomIn').addEventListener('click', () => {
-  zoom = Math.min(4, Number((zoom + 0.25).toFixed(2)));
-  updateZoom();
-  render();
-});
-
-$('zoomOut').addEventListener('click', () => {
-  zoom = Math.max(0.25, Number((zoom - 0.25).toFixed(2)));
-  updateZoom();
-  render();
-});
-
-$('fit').addEventListener('click', () => {
-  fitImage();
-  render();
-});
-
-$('reset').addEventListener('click', resetEditor);
-$('export').addEventListener('click', () => {
-  if (!image) return;
-  const link = document.createElement('a');
-  link.download = 'edited-image.png';
-  link.href = canvas.toDataURL('image/png');
-  link.click();
-});
-
-window.addEventListener('resize', () => {
-  if (image && zoom < 1) {
-    fitImage();
-    render();
-  }
-});
-
-updateLabels();
-updateZoom();
-setEmpty(true);
-render();
+$('open').onclick = () => fileInput.click();
+fileInput.onchange = (event) => { loadImage(event.target.files && event.target.files[0]); event.target.value = ''; };
+stage.ondragover = (event) => { event.preventDefault(); stage.classList.add('dragging'); };
+stage.ondragleave = () => stage.classList.remove('dragging');
+stage.ondrop = (event) => { event.preventDefault(); stage.classList.remove('dragging'); loadImage(event.dataTransfer && event.dataTransfer.files[0]); };
+Object.keys(controls).forEach((key) => controls[key].oninput = () => { updateLabels(); render(); });
+document.querySelectorAll('.tool').forEach((button) => button.onclick = () => { tool = button.dataset.tool; document.querySelectorAll('.tool').forEach((item) => item.classList.toggle('active', item === button)); });
+function point(event) { const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height }; }
+canvas.onpointerdown = (event) => { if (!image) return; const p = point(event); if (tool === 'brush') { drawing = true; canvas.setPointerCapture?.(event.pointerId); strokes.push({ color: controls.color.value, size: Number(controls.size.value), points: [p] }); render(); } else if (tool === 'text') { const text = prompt('Add text:', 'Your text'); if (text) { texts.push({ text, x: p.x, y: p.y, color: controls.color.value }); render(); } } };
+canvas.onpointermove = (event) => { if (drawing) { strokes[strokes.length - 1].points.push(point(event)); render(); } };
+canvas.onpointerup = () => { drawing = false; };
+canvas.onpointercancel = () => { drawing = false; };
+canvas.ondblclick = () => { if (image) { zoom = zoom === 1 ? 2 : 1; updateZoom(); render(); } };
+$('zoomIn').onclick = () => { zoom = Math.min(4, +(zoom + .25).toFixed(2)); updateZoom(); render(); };
+$('zoomOut').onclick = () => { zoom = Math.max(.25, +(zoom - .25).toFixed(2)); updateZoom(); render(); };
+$('fit').onclick = () => { fitImage(); render(); };
+$('reset').onclick = () => { ['brightness','contrast','saturation'].forEach((key) => controls[key].value = 100); ['grayscale','sepia','hue'].forEach((key) => controls[key].value = 0); controls.size.value = 12; controls.color.value = '#ff5d73'; strokes = []; texts = []; if (image) fitImage(); updateLabels(); render(); };
+viewButton.onclick = () => { if (image) window.open(canvas.toDataURL('image/png'), '_blank', 'noopener,noreferrer'); };
+exportButton.onclick = downloadPng;
+window.onresize = () => { if (image && zoom < 1) { fitImage(); render(); } };
+updateLabels(); updateZoom(); setLoaded(false); render();
