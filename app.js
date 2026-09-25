@@ -4,487 +4,365 @@ const canvas = $('canvas');
 const ctx = canvas.getContext('2d');
 const stage = $('stage');
 const empty = $('empty');
-const file = $('file');
+const fileInput = $('file');
 const status = $('status');
-const view = $('view');
-const download = $('export');
+const viewButton = $('view');
+const exportButton = $('export');
 const sizeInput = $('size');
 const strengthInput = $('strength');
-const sizeOut = $('sizeOut');
-const strengthOut = $('strengthOut');
+const sizeOutput = $('sizeOut');
+const strengthOutput = $('strengthOut');
 const layerList = $('layersList');
 const zoomLabel = $('zoomLabel');
 const optionButtons = [...document.querySelectorAll('.option-button')];
-const addLayerButton = $('addLayer');
 
-const ids = [
-  'exposure', 'brightness', 'contrast', 'highlights', 'shadows',
-  'temperature', 'tint', 'saturation', 'vibrance', 'hue'
-];
+const filterValues = {
+  exposure: 0,
+  brightness: 0,
+  contrast: 0,
+  highlights: 0,
+  shadows: 0,
+  temperature: 0,
+  tint: 0,
+  saturation: 0,
+  vibrance: 0,
+  hue: 0
+};
 
-const controls = Object.fromEntries(ids.map((id) => [id, $(id)]));
-const outputs = Object.fromEntries(ids.map((id) => [id, $(`${id}Out`)]));
-const layerDefinitions = [
-  { id: 'base', name: 'Background', type: 'image', visible: true, active: false },
-  { id: 'filter-layer', name: 'Filter layer', type: 'filter', visible: true, active: true }
+const layers = [
+  { name: 'Background', type: 'image', visible: true, active: false },
+  { name: 'Filter layer', type: 'filter', visible: true, active: true }
 ];
 
 let source = null;
 let zoom = 1;
-let queued = 0;
+let mode = 'whole';
 let drawing = false;
-let currentMode = 'whole';
 let strokePoints = [];
-let layerCounter = 1;
+let layerNumber = 1;
 
-function labels() {
-  ids.forEach((id) => {
-    outputs[id].textContent = id === 'hue' ? `${controls[id].value}°` : controls[id].value;
-  });
-
-  sizeOut.textContent = `${sizeInput.value}px`;
-  strengthOut.textContent = `${strengthInput.value}%`;
+function setStatus(message) {
+  status.textContent = message;
 }
 
-function loaded(on) {
-  empty.hidden = on;
-  canvas.style.visibility = on ? 'visible' : 'hidden';
-  view.disabled = !on;
-  download.disabled = !on;
+function updateLabels() {
+  sizeOutput.textContent = `${sizeInput.value}px`;
+  strengthOutput.textContent = `${strengthInput.value}%`;
 }
 
-function updateZoom() {
+function setLoaded(isLoaded) {
+  empty.hidden = isLoaded;
+  canvas.style.visibility = isLoaded ? 'visible' : 'hidden';
+  viewButton.disabled = !isLoaded;
+  exportButton.disabled = !isLoaded;
+}
+
+function updateZoomLabel() {
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
 }
 
-function fit() {
-  if (!source) return;
-  zoom = Math.max(
-    0.05,
-    Math.min(
-      1,
-      (stage.clientWidth - 48) / source.width,
-      (stage.clientHeight - 48) / source.height
-    )
-  );
-  updateZoom();
-  render(true);
+function clamp(value) {
+  return Math.max(0, Math.min(255, value));
 }
 
-function schedule() {
-  if (queued) return;
-  queued = requestAnimationFrame(() => {
-    queued = 0;
-    render(true);
-  });
-}
-
-function clamp(v) {
-  return Math.max(0, Math.min(255, v));
-}
-
-function process(raw, filter = false) {
-  const d = new Uint8ClampedArray(raw);
-
-  const ex = 2 ** ((Number(controls.exposure.value) + (filter ? 22 : 0)) / 100);
-  const br = Number(controls.brightness.value) + (filter ? 10 : 0);
-  const co = Number(controls.contrast.value) + (filter ? 15 : 0);
-  const cf = (259 * (co + 255)) / (255 * (259 - co));
-  const hi = Number(controls.highlights.value);
-  const sh = Number(controls.shadows.value);
-  const temp = Number(controls.temperature.value);
-  const tint = Number(controls.tint.value);
-  const sat = Number(controls.saturation.value) / 100 + (filter ? 0.15 : 0);
-  const vib = Number(controls.vibrance.value) / 100;
-  const hue = Number(controls.hue.value) * Math.PI / 180;
+function processPixels(raw) {
+  const pixels = new Uint8ClampedArray(raw);
+  const exposure = 2 ** (filterValues.exposure / 100);
+  const brightness = filterValues.brightness;
+  const contrast = filterValues.contrast;
+  const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+  const saturation = 1 + filterValues.saturation / 100;
+  const hue = filterValues.hue * Math.PI / 180;
   const cos = Math.cos(hue);
   const sin = Math.sin(hue);
 
-  for (let i = 0; i < d.length; i += 4) {
-    let r = d[i];
-    let g = d[i + 1];
-    let b = d[i + 2];
+  for (let index = 0; index < pixels.length; index += 4) {
+    let red = clamp(pixels[index] * exposure + brightness);
+    let green = clamp(pixels[index + 1] * exposure + brightness);
+    let blue = clamp(pixels[index + 2] * exposure + brightness);
 
-    r = clamp((r * ex) + br);
-    g = clamp((g * ex) + br);
-    b = clamp((b * ex) + br);
+    red = clamp(contrastFactor * (red - 128) + 128);
+    green = clamp(contrastFactor * (green - 128) + 128);
+    blue = clamp(contrastFactor * (blue - 128) + 128);
 
-    r = clamp(cf * (r - 128) + 128);
-    g = clamp(cf * (g - 128) + 128);
-    b = clamp(cf * (b - 128) + 128);
+    const average = (red + green + blue) / 3;
+    red = clamp(average + (red - average) * saturation);
+    green = clamp(average + (green - average) * saturation);
+    blue = clamp(average + (blue - average) * saturation);
 
-    const lum = (r + g + b) / 3;
-    const highlightBoost = hi / 100;
-    const shadowBoost = sh / 100;
-
-    const lift = lum < 128 ? shadowBoost * (128 - lum) : highlightBoost * (lum - 128);
-    r = clamp(r + lift * 2.5);
-    g = clamp(g + lift * 2.5);
-    b = clamp(b + lift * 2.5);
-
-    r = clamp(r + temp * 0.7);
-    g = clamp(g + temp * 0.2);
-    b = clamp(b - temp * 0.5 + tint * 0.3);
-
-    const avg = (r + g + b) / 3;
-    const satFactor = 1 + sat + (vib * (1 - Math.abs(avg - 128) / 128));
-
-    r = clamp(avg + (r - avg) * satFactor);
-    g = clamp(avg + (g - avg) * satFactor);
-    b = clamp(avg + (b - avg) * satFactor);
-
-    const rr = r * cos + g * sin * 0.7;
-    const gg = g * cos - r * sin * 0.7;
-    const bb = b * cos + (1 - Math.abs(sin)) * 25;
-
-    d[i] = clamp(rr);
-    d[i + 1] = clamp(gg);
-    d[i + 2] = clamp(bb);
+    pixels[index] = clamp(red * cos + green * sin * 0.7);
+    pixels[index + 1] = clamp(green * cos - red * sin * 0.7);
+    pixels[index + 2] = clamp(blue * cos + (1 - Math.abs(sin)) * 25);
   }
 
-  return d;
+  return pixels;
 }
 
-function drawInkStroke(points, radius) {
+function drawStroke(points, color, width) {
   if (!points.length) return;
 
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = radius;
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-  ctx.shadowColor = 'rgba(255,255,255,0.7)';
-  ctx.shadowBlur = radius * 1.2;
-
+  ctx.lineWidth = width;
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = width * 0.8;
   ctx.beginPath();
+
   points.forEach((point, index) => {
-    if (index === 0) {
-      ctx.moveTo(point.x, point.y);
-    } else {
-      ctx.lineTo(point.x, point.y);
-    }
+    if (index === 0) ctx.moveTo(point.x, point.y);
+    else ctx.lineTo(point.x, point.y);
   });
 
   if (points.length === 1) {
-    ctx.beginPath();
-    ctx.arc(points[0].x, points[0].y, radius * 0.7, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.arc(points[0].x, points[0].y, width / 2, 0, Math.PI * 2);
+    ctx.fillStyle = color;
     ctx.fill();
-    ctx.restore();
-    return;
+  } else {
+    ctx.stroke();
   }
 
-  ctx.stroke();
   ctx.restore();
 }
 
-function drawMaskStroke(points, radius) {
-  if (!points.length) return;
-
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = radius * 1.5;
-  ctx.strokeStyle = 'rgba(125, 130, 255, 0.6)';
-  ctx.shadowColor = 'rgba(125, 130, 255, 0.9)';
-  ctx.shadowBlur = 18;
-
-  ctx.beginPath();
-  points.forEach((point, index) => {
-    if (index === 0) {
-      ctx.moveTo(point.x, point.y);
-    } else {
-      ctx.lineTo(point.x, point.y);
-    }
-  });
-  ctx.stroke();
-  ctx.restore();
-}
-
-function point(e) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: (e.clientX - rect.left) * canvas.width / rect.width,
-    y: (e.clientY - rect.top) * canvas.height / rect.height
-  };
-}
-
-function render(previewMode) {
+function render() {
   if (!source) {
-    loaded(false);
+    setLoaded(false);
     return;
   }
 
-  const processed = new ImageData(process(source.data, true), source.width, source.height);
-
-  const baseCanvas = document.createElement('canvas');
-  baseCanvas.width = source.width;
-  baseCanvas.height = source.height;
-
-  const baseCtx = baseCanvas.getContext('2d');
-  baseCtx.putImageData(processed, 0, 0);
+  const imageData = new ImageData(
+    processPixels(source.data),
+    source.width,
+    source.height
+  );
 
   canvas.width = source.width;
   canvas.height = source.height;
   canvas.style.width = `${source.width * zoom}px`;
   canvas.style.height = `${source.height * zoom}px`;
+  ctx.putImageData(imageData, 0, 0);
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
-
-  if (currentMode === 'brush' && strokePoints.length) {
-    drawInkStroke(strokePoints, Number(sizeInput.value));
+  if (mode === 'brush') {
+    drawStroke(strokePoints, 'rgba(255, 255, 255, 0.85)', Number(sizeInput.value));
+  } else if (mode === 'mask') {
+    drawStroke(strokePoints, 'rgba(125, 130, 255, 0.55)', Number(sizeInput.value));
   }
 
-  if (currentMode === 'mask' && strokePoints.length) {
-    drawMaskStroke(strokePoints, Number(sizeInput.value));
-  }
-
-  loaded(true);
+  setLoaded(true);
 }
 
-function loadImage(fileObj) {
-  if (!fileObj || !fileObj.type.startsWith('image/')) {
-    status.textContent = 'Please choose an image file.';
+function fitImage() {
+  if (!source) return;
+  zoom = Math.max(0.05, Math.min(
+    1,
+    (stage.clientWidth - 48) / source.width,
+    (stage.clientHeight - 48) / source.height
+  ));
+  updateZoomLabel();
+  render();
+}
+
+function getPoint(event) {
+  const bounds = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - bounds.left) * canvas.width / bounds.width,
+    y: (event.clientY - bounds.top) * canvas.height / bounds.height
+  };
+}
+
+function loadImage(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    setStatus('Please choose an image file.');
     return;
   }
 
-  const url = URL.createObjectURL(fileObj);
-  const img = new Image();
-  status.textContent = 'Loading…';
+  setStatus('Loading…');
+  const image = new Image();
+  const objectUrl = URL.createObjectURL(file);
 
-  img.onload = () => {
-    const temp = document.createElement('canvas');
-    temp.width = img.naturalWidth;
-    temp.height = img.naturalHeight;
-    const tempCtx = temp.getContext('2d');
-    tempCtx.drawImage(img, 0, 0);
+  image.onload = () => {
+    try {
+      const imageCanvas = document.createElement('canvas');
+      imageCanvas.width = image.naturalWidth;
+      imageCanvas.height = image.naturalHeight;
+      const imageContext = imageCanvas.getContext('2d');
+      imageContext.drawImage(image, 0, 0);
 
-    source = {
-      width: temp.width,
-      height: temp.height,
-      data: tempCtx.getImageData(0, 0, temp.width, temp.height).data
-    };
+      source = {
+        width: imageCanvas.width,
+        height: imageCanvas.height,
+        data: imageContext.getImageData(0, 0, imageCanvas.width, imageCanvas.height).data
+      };
 
-    fit();
-    status.textContent = `Loaded: ${fileObj.name}`;
-    URL.revokeObjectURL(url);
+      strokePoints = [];
+      fitImage();
+      setStatus(`Loaded: ${file.name}`);
+    } catch (error) {
+      console.error(error);
+      setStatus('The image could not be processed.');
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   };
 
-  img.onerror = () => {
-    status.textContent = 'The image could not be loaded.';
-    URL.revokeObjectURL(url);
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    setStatus('The image could not be loaded.');
   };
 
-  img.src = url;
+  image.src = objectUrl;
 }
 
-function exportPNG() {
-  if (!source) return;
-  render(false);
-
-  canvas.toBlob((blob) => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'pixelforge-edited.png';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, 'image/png');
-}
-
-function renderLayerList() {
-  layerList.innerHTML = layerDefinitions.map((layer, index) => {
-    const activeClass = layer.active ? 'active' : '';
-    const hiddenClass = layer.visible ? '' : 'hidden';
-    const swatch = layer.type === 'mask' ? 'mask' : 'filter';
-
-    return `
-      <li class="layer-item ${activeClass} ${hiddenClass}" data-index="${index}">
-        <span class="layer-swatch ${swatch}"></span>
-        <span class="layer-name">${layer.name}</span>
-        <button class="layer-toggle" type="button" data-toggle="${index}">
-          ${layer.visible ? '◉' : '○'}
-        </button>
-      </li>
-    `;
-  }).join('');
+function renderLayers() {
+  layerList.innerHTML = layers.map((layer, index) => `
+    <li class="layer-item ${layer.active ? 'active' : ''} ${layer.visible ? '' : 'hidden'}" data-index="${index}">
+      <span class="layer-swatch ${layer.type === 'mask' ? 'mask' : 'filter'}"></span>
+      <span class="layer-name">${layer.name}</span>
+      <button class="layer-toggle" type="button" data-toggle="${index}">${layer.visible ? '◉' : '○'}</button>
+    </li>
+  `).join('');
 
   layerList.querySelectorAll('.layer-item').forEach((item) => {
     item.addEventListener('click', (event) => {
-      if (event.target.matches('.layer-toggle')) return;
-
+      if (event.target.closest('.layer-toggle')) return;
       const index = Number(item.dataset.index);
-      layerDefinitions.forEach((layer, layerIndex) => {
-        layer.active = layerIndex === index;
-      });
-
-      renderLayerList();
-      status.textContent = `${layerDefinitions[index].name} selected`;
+      layers.forEach((layer, layerIndex) => { layer.active = layerIndex === index; });
+      renderLayers();
+      setStatus(`${layers[index].name} selected`);
     });
   });
 
   layerList.querySelectorAll('.layer-toggle').forEach((button) => {
     button.addEventListener('click', (event) => {
       event.stopPropagation();
-      const index = Number(button.dataset.toggle);
-      layerDefinitions[index].visible = !layerDefinitions[index].visible;
-      renderLayerList();
+      layers[Number(button.dataset.toggle)].visible = !layers[Number(button.dataset.toggle)].visible;
+      renderLayers();
+      render();
     });
   });
 }
 
-function addLayer() {
-  layerCounter += 1;
-  const type = layerCounter % 2 === 0 ? 'filter' : 'mask';
-  const name = type === 'mask' ? `Mask ${layerCounter}` : `Filter ${layerCounter}`;
-
-  layerDefinitions.push({
-    id: `layer-${layerCounter}`,
-    name,
-    type,
-    visible: true,
-    active: false
-  });
-
-  layerDefinitions.forEach((layer) => {
-    layer.active = false;
-  });
-
-  layerDefinitions[layerDefinitions.length - 1].active = true;
-  renderLayerList();
-  status.textContent = `${name} added`;
-}
-
-function setToolMode(mode) {
-  currentMode = mode;
-
+function setMode(nextMode) {
+  mode = nextMode;
+  strokePoints = [];
   optionButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.target === mode);
   });
-
-  const messages = {
+  setStatus({
     whole: 'Whole image mode: apply adjustments across the full image.',
-    brush: 'Brush mode: paint a soft round ink effect.',
-    mask: 'Mask mode: paint a masking stroke for local control.'
-  };
-
-  status.textContent = messages[mode] || 'Ready';
+    brush: 'Brush mode: paint with a soft round brush.',
+    mask: 'Mask mode: paint a local mask.'
+  }[mode]);
+  render();
 }
 
-$('open').onclick = () => file.click();
-file.onchange = (e) => {
-  loadImage(e.target.files?.[0]);
-  e.target.value = '';
-};
-
-download.onclick = exportPNG;
-view.onclick = () => {
-  render(false);
-  window.open(canvas.toDataURL('image/png'), '_blank');
+$('open').onclick = () => fileInput.click();
+fileInput.onchange = (event) => {
+  loadImage(event.target.files?.[0]);
+  event.target.value = '';
 };
 
 $('zoomIn').onclick = () => {
   zoom = Math.min(4, zoom + 0.25);
-  updateZoom();
-  render(true);
+  updateZoomLabel();
+  render();
 };
 
 $('zoomOut').onclick = () => {
   zoom = Math.max(0.25, zoom - 0.25);
-  updateZoom();
-  render(true);
+  updateZoomLabel();
+  render();
 };
 
-$('fit').onclick = () => {
-  fit();
-};
+$('fit').onclick = fitImage;
 
 $('reset').onclick = () => {
-  ids.forEach((id) => {
-    controls[id].value = 0;
-  });
-
+  Object.keys(filterValues).forEach((key) => { filterValues[key] = 0; });
   sizeInput.value = 12;
   strengthInput.value = 80;
-  labels();
   strokePoints = [];
-  render(true);
+  updateLabels();
+  render();
+};
+
+$('addLayer').onclick = () => {
+  layerNumber += 1;
+  const type = layerNumber % 2 === 0 ? 'filter' : 'mask';
+  layers.forEach((layer) => { layer.active = false; });
+  layers.push({
+    name: type === 'mask' ? `Mask ${layerNumber}` : `Filter ${layerNumber}`,
+    type,
+    visible: true,
+    active: true
+  });
+  renderLayers();
+  setStatus(`${layers[layers.length - 1].name} added`);
 };
 
 optionButtons.forEach((button) => {
-  button.addEventListener('click', () => setToolMode(button.dataset.target));
-});
-
-ids.forEach((id) => {
-  controls[id].oninput = () => {
-    labels();
-    schedule();
-  };
+  button.onclick = () => setMode(button.dataset.target);
 });
 
 sizeInput.oninput = () => {
-  labels();
-  schedule();
+  updateLabels();
+  render();
 };
 
-strengthInput.oninput = () => {
-  labels();
-  schedule();
-};
+strengthInput.oninput = updateLabels;
 
-stage.ondragover = (e) => {
-  e.preventDefault();
+stage.ondragover = (event) => {
+  event.preventDefault();
   stage.classList.add('dragging');
 };
 
-stage.ondragleave = () => {
+stage.ondragleave = () => stage.classList.remove('dragging');
+stage.ondrop = (event) => {
+  event.preventDefault();
   stage.classList.remove('dragging');
+  loadImage(event.dataTransfer?.files?.[0]);
 };
 
-stage.ondrop = (e) => {
-  e.preventDefault();
-  stage.classList.remove('dragging');
-  if (e.dataTransfer?.files?.[0]) {
-    loadImage(e.dataTransfer.files[0]);
-  }
-};
-
-canvas.onpointerdown = (e) => {
-  if (!source) return;
-
+canvas.onpointerdown = (event) => {
+  if (!source || mode === 'whole') return;
   drawing = true;
-  strokePoints = [point(e)];
-  canvas.setPointerCapture?.(e.pointerId);
-  render(true);
+  strokePoints = [getPoint(event)];
+  canvas.setPointerCapture?.(event.pointerId);
+  render();
 };
 
-canvas.onpointermove = (e) => {
+canvas.onpointermove = (event) => {
   if (!drawing || !source) return;
-  strokePoints.push(point(e));
-  render(true);
+  strokePoints.push(getPoint(event));
+  render();
 };
 
-canvas.onpointerup = () => {
-  drawing = false;
+canvas.onpointerup = () => { drawing = false; };
+canvas.onpointercancel = () => { drawing = false; };
+window.onresize = () => { if (source) fitImage(); };
+
+$('export').onclick = () => {
+  if (!source) return;
+  render();
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pixelforge-edited.png';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/png');
 };
 
-canvas.onpointercancel = () => {
-  drawing = false;
+$('view').onclick = () => {
+  if (!source) return;
+  render();
+  window.open(canvas.toDataURL('image/png'), '_blank');
 };
 
-window.onresize = () => {
-  if (source) fit();
-};
-
-addLayerButton.onclick = addLayer;
-labels();
-renderLayerList();
-updateZoom();
-setToolMode('whole');
-loaded(false);
-
-if (source) {
-  render(true);
-}
+updateLabels();
+updateZoomLabel();
+renderLayers();
+setLoaded(false);
