@@ -2,23 +2,45 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
 const ctx = canvas.getContext('2d');
 const stage = $('stage');
+const fileInput = $('file');
 const empty = $('empty');
 const status = $('status');
-const fileInput = $('file');
-const controls = ['brightness','contrast','saturation','grayscale','sepia','hue','size','color'].reduce((o, id) => (o[id] = $(id), o), {});
-const outputs = ['brightness','contrast','saturation','grayscale','sepia','hue','size'].reduce((o, id) => (o[id] = $(`${id}Out`), o), {});
+
+const controls = {
+  brightness: $('brightness'),
+  contrast: $('contrast'),
+  saturation: $('saturation'),
+  grayscale: $('grayscale'),
+  sepia: $('sepia'),
+  hue: $('hue'),
+  size: $('size'),
+  color: $('color')
+};
+
+const outputs = {
+  brightness: $('brightnessOut'),
+  contrast: $('contrastOut'),
+  saturation: $('saturationOut'),
+  grayscale: $('grayscaleOut'),
+  sepia: $('sepiaOut'),
+  hue: $('hueOut'),
+  size: $('sizeOut')
+};
+
 let image = null;
-let zoom = 1;
-let tool = 'select';
-let drawing = false;
+let baseCanvas = document.createElement('canvas');
+let baseCtx = baseCanvas.getContext('2d');
 let strokes = [];
 let texts = [];
+let zoom = 1;
+let drawing = false;
+let tool = 'select';
 
 function setEmpty(visible) {
-  empty.hidden = visible;
-  empty.style.display = visible ? 'grid' : 'none';
-  canvas.style.visibility = visible ? 'hidden' : 'visible';
+  empty.hidden = !visible;
+  canvas.style.visibility = visible ? 'visible' : 'hidden';
 }
+
 function updateLabels() {
   outputs.brightness.textContent = `${controls.brightness.value}%`;
   outputs.contrast.textContent = `${controls.contrast.value}%`;
@@ -28,43 +50,250 @@ function updateLabels() {
   outputs.hue.textContent = `${controls.hue.value}°`;
   outputs.size.textContent = `${controls.size.value}px`;
 }
-function updateZoom() { $('zoomOutLabel').textContent = `${Math.round(zoom * 100)}%`; }
-function getFilter() { return `brightness(${controls.brightness.value}%) contrast(${controls.contrast.value}%) saturate(${controls.saturation.value}%) grayscale(${controls.grayscale.value}%) sepia(${controls.sepia.value}%) hue-rotate(${controls.hue.value}deg)`; }
-function fitImage() { if (!image) return; const w = Math.max(120, stage.clientWidth - 48); const h = Math.max(120, stage.clientHeight - 48); zoom = Math.min(1, w / canvas.width, h / canvas.height); updateZoom(); }
+
+function updateZoom() {
+  $('zoomOutLabel').textContent = `${Math.round(zoom * 100)}%`;
+}
+
+function getFilterString() {
+  return [
+    `brightness(${controls.brightness.value}%)`,
+    `contrast(${controls.contrast.value}%)`,
+    `saturate(${controls.saturation.value}%)`,
+    `grayscale(${controls.grayscale.value}%)`,
+    `sepia(${controls.sepia.value}%)`,
+    `hue-rotate(${controls.hue.value}deg)`
+  ].join(' ');
+}
+
+function fitImage() {
+  if (!image) return;
+  const maxW = Math.max(120, stage.clientWidth - 48);
+  const maxH = Math.max(120, stage.clientHeight - 48);
+  zoom = Math.min(1, maxW / baseCanvas.width, maxH / baseCanvas.height);
+  zoom = Number(zoom.toFixed(3));
+  updateZoom();
+}
+
 function render() {
-  if (!image) { ctx.clearRect(0, 0, canvas.width, canvas.height); setEmpty(true); return; }
-  setEmpty(false);
+  if (!image) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setEmpty(false);
+    return;
+  }
+
+  setEmpty(true);
+
+  canvas.width = baseCanvas.width;
+  canvas.height = baseCanvas.height;
   canvas.style.width = `${Math.max(1, canvas.width * zoom)}px`;
   canvas.style.height = `${Math.max(1, canvas.height * zoom)}px`;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.save(); ctx.filter = getFilter(); ctx.drawImage(image, 0, 0, canvas.width, canvas.height); ctx.restore();
-  strokes.forEach((s) => { ctx.save(); ctx.strokeStyle = s.color; ctx.lineWidth = s.size; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); s.points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.restore(); });
-  texts.forEach((t) => { ctx.fillStyle = t.color; ctx.font = '32px system-ui'; ctx.fillText(t.text, t.x, t.y); });
+  ctx.filter = getFilterString();
+  ctx.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
+  ctx.filter = 'none';
+
+  for (const stroke of strokes) {
+    if (!stroke.points || stroke.points.length === 0) continue;
+    ctx.save();
+    ctx.strokeStyle = stroke.color;
+    ctx.lineWidth = stroke.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    stroke.points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  for (const item of texts) {
+    ctx.save();
+    ctx.fillStyle = item.color;
+    ctx.font = '32px system-ui';
+    ctx.fillText(item.text, item.x, item.y);
+    ctx.restore();
+  }
 }
+
+function getPoint(event) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+    y: ((event.clientY - rect.top) / rect.height) * canvas.height
+  };
+}
+
 function loadImage(file) {
-  if (!file || !file.type.startsWith('image/')) { status.textContent = 'Please choose a valid image file.'; return; }
-  const url = URL.createObjectURL(file); const img = new Image(); status.textContent = 'Loading image…';
-  img.onload = () => { image = img; canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; strokes = []; texts = []; fitImage(); status.textContent = `Loaded: ${file.name}`; render(); URL.revokeObjectURL(url); };
-  img.onerror = () => { status.textContent = 'The image could not be loaded.'; URL.revokeObjectURL(url); };
+  if (!file || !file.type.startsWith('image/')) {
+    status.textContent = 'Please choose a valid image file.';
+    return;
+  }
+
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+
+  img.onload = () => {
+    image = img;
+    baseCanvas.width = img.naturalWidth;
+    baseCanvas.height = img.naturalHeight;
+    baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+    baseCtx.drawImage(img, 0, 0, baseCanvas.width, baseCanvas.height);
+    strokes = [];
+    texts = [];
+    fitImage();
+    status.textContent = `Loaded: ${file.name}`;
+    render();
+    URL.revokeObjectURL(url);
+  };
+
+  img.onerror = () => {
+    status.textContent = 'The image could not be loaded.';
+    URL.revokeObjectURL(url);
+  };
+
   img.src = url;
 }
+
+function resetEditor() {
+  controls.brightness.value = 100;
+  controls.contrast.value = 100;
+  controls.saturation.value = 100;
+  controls.grayscale.value = 0;
+  controls.sepia.value = 0;
+  controls.hue.value = 0;
+  controls.size.value = 12;
+  controls.color.value = '#ff5d73';
+  strokes = [];
+  texts = [];
+  if (image) fitImage();
+  updateLabels();
+  render();
+}
+
 $('open').addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (e) => { loadImage(e.target.files && e.target.files[0]); e.target.value = ''; });
-stage.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('dragging'); });
-stage.addEventListener('dragleave', () => stage.classList.remove('dragging'));
-stage.addEventListener('drop', (e) => { e.preventDefault(); stage.classList.remove('dragging'); loadImage(e.dataTransfer && e.dataTransfer.files[0]); });
-Object.keys(controls).forEach((key) => controls[key].addEventListener('input', () => { updateLabels(); render(); }));
-document.querySelectorAll('.tool').forEach((button) => button.addEventListener('click', () => { tool = button.dataset.tool; document.querySelectorAll('.tool').forEach((b) => b.classList.toggle('active', b === button)); }));
-function point(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height }; }
-canvas.addEventListener('pointerdown', (e) => { if (!image) return; if (tool === 'brush') { drawing = true; canvas.setPointerCapture(e.pointerId); strokes.push({ color: controls.color.value, size: Number(controls.size.value), points: [point(e)] }); render(); } else if (tool === 'text') { const text = prompt('Add text:', 'Your text'); if (text) { texts.push({ text, x: point(e).x, y: point(e).y, color: controls.color.value }); render(); } } });
-canvas.addEventListener('pointermove', (e) => { if (drawing) { strokes.at(-1).points.push(point(e)); render(); } });
-canvas.addEventListener('pointerup', () => { drawing = false; });
-canvas.addEventListener('pointercancel', () => { drawing = false; });
-$('zoomIn').addEventListener('click', () => { zoom = Math.min(4, +(zoom + .25).toFixed(2)); updateZoom(); render(); });
-$('zoomOut').addEventListener('click', () => { zoom = Math.max(.25, +(zoom - .25).toFixed(2)); updateZoom(); render(); });
-$('fit').addEventListener('click', () => { fitImage(); render(); });
-window.addEventListener('resize', () => { if (image && zoom < 1) { fitImage(); render(); } });
-canvas.addEventListener('dblclick', () => { if (image) { zoom = zoom === 1 ? 2 : 1; updateZoom(); render(); } });
-$('reset').addEventListener('click', () => { ['brightness','contrast','saturation'].forEach((k) => controls[k].value = 100); ['grayscale','sepia','hue'].forEach((k) => controls[k].value = 0); controls.size.value = 12; controls.color.value = '#ff5d73'; strokes = []; texts = []; if (image) fitImage(); updateLabels(); render(); });
-$('export').addEventListener('click', () => { if (!image) return; const a = document.createElement('a'); a.download = 'edited-image.png'; a.href = canvas.toDataURL('image/png'); a.click(); });
-updateLabels(); updateZoom(); render();
+fileInput.addEventListener('change', (event) => {
+  const file = event.target.files && event.target.files[0];
+  loadImage(file);
+  fileInput.value = '';
+});
+
+stage.addEventListener('dragover', (event) => {
+  event.preventDefault();
+  stage.classList.add('dragging');
+});
+
+stage.addEventListener('dragleave', () => {
+  stage.classList.remove('dragging');
+});
+
+stage.addEventListener('drop', (event) => {
+  event.preventDefault();
+  stage.classList.remove('dragging');
+  const file = event.dataTransfer && event.dataTransfer.files[0];
+  loadImage(file);
+});
+
+Object.keys(controls).forEach((key) => {
+  controls[key].addEventListener('input', () => {
+    updateLabels();
+    render();
+  });
+});
+
+document.querySelectorAll('.tool').forEach((button) => {
+  button.addEventListener('click', () => {
+    tool = button.dataset.tool;
+    document.querySelectorAll('.tool').forEach((node) => node.classList.toggle('active', node === button));
+  });
+});
+
+canvas.addEventListener('pointerdown', (event) => {
+  if (!image) return;
+
+  const point = getPoint(event);
+
+  if (tool === 'brush') {
+    drawing = true;
+    strokes.push({
+      color: controls.color.value,
+      size: Number(controls.size.value),
+      points: [point]
+    });
+    render();
+    return;
+  }
+
+  if (tool === 'text') {
+    const text = window.prompt('Add text:', 'Your text');
+    if (!text) return;
+    texts.push({ text, x: point.x, y: point.y, color: controls.color.value });
+    render();
+  }
+});
+
+canvas.addEventListener('pointermove', (event) => {
+  if (!drawing) return;
+  const point = getPoint(event);
+  const lastStroke = strokes[strokes.length - 1];
+  if (lastStroke) {
+    lastStroke.points.push(point);
+    render();
+  }
+});
+
+canvas.addEventListener('pointerup', () => {
+  drawing = false;
+});
+
+canvas.addEventListener('pointerleave', () => {
+  drawing = false;
+});
+
+canvas.addEventListener('dblclick', () => {
+  if (!image) return;
+  zoom = zoom === 1 ? 2 : 1;
+  updateZoom();
+  render();
+});
+
+$('zoomIn').addEventListener('click', () => {
+  zoom = Math.min(4, Number((zoom + 0.25).toFixed(2)));
+  updateZoom();
+  render();
+});
+
+$('zoomOut').addEventListener('click', () => {
+  zoom = Math.max(0.25, Number((zoom - 0.25).toFixed(2)));
+  updateZoom();
+  render();
+});
+
+$('fit').addEventListener('click', () => {
+  fitImage();
+  render();
+});
+
+$('reset').addEventListener('click', resetEditor);
+$('export').addEventListener('click', () => {
+  if (!image) return;
+  const link = document.createElement('a');
+  link.download = 'edited-image.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+window.addEventListener('resize', () => {
+  if (image && zoom < 1) {
+    fitImage();
+    render();
+  }
+});
+
+updateLabels();
+updateZoom();
+setEmpty(false);
+render();
